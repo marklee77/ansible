@@ -217,6 +217,9 @@ class AnsibleModule(object):
         if not self.no_log:
             self._log_invocation()
 
+        # finally, make sure we're in a sane working dir
+        self._set_cwd()
+
     def load_file_common_arguments(self, params):
         '''
         many modules deal with files, this encapsulates common
@@ -815,6 +818,26 @@ class AnsibleModule(object):
             syslog.openlog(str(module), 0, syslog.LOG_USER)
             syslog.syslog(syslog.LOG_NOTICE, unicode(msg).encode('utf8'))
 
+    def _set_cwd(self):
+        try:
+            cwd = os.getcwd()
+            if not os.access(cwd, os.F_OK|os.R_OK):
+                raise
+            return cwd
+        except:
+            # we don't have access to the cwd, probably because of sudo. 
+            # Try and move to a neutral location to prevent errors
+            for cwd in [os.path.expandvars('$HOME'), tempfile.gettempdir()]:
+                try:
+                    if os.access(cwd, os.F_OK|os.R_OK):
+                        os.chdir(cwd)
+                        return cwd
+                except:
+                    pass
+        # we won't error here, as it may *not* be a problem, 
+        # and we don't want to break modules unnecessarily
+        return None    
+
     def get_bin_path(self, arg, required=False, opt_dirs=[]):
         '''
         find system executable in PATH.
@@ -1119,3 +1142,5 @@ class AnsibleModule(object):
                 break
         return '%.2f %s' % (float(size)/ limit, suffix)
 
+def get_module_path():
+    return os.path.dirname(os.path.realpath(__file__))

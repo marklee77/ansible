@@ -479,10 +479,14 @@ class PlayBook(object):
     def _do_setup_step(self, play):
         ''' get facts from the remote system '''
 
-        if play.gather_facts is False:
-            return {}
-
         host_list = self._trim_unavailable_hosts(play._play_hosts)
+
+        if play.gather_facts is None and C.DEFAULT_GATHERING == 'smart':
+            host_list = [h for h in host_list if h not in self.SETUP_CACHE or 'module_setup' not in self.SETUP_CACHE[h]]
+            if len(host_list) == 0:
+                return {}
+        elif play.gather_facts is False or (play.gather_facts is None and C.DEFAULT_GATHERING == 'explicit'):
+            return {}
 
         self.callbacks.on_setup()
         self.inventory.restrict_to(host_list)
@@ -670,8 +674,14 @@ class PlayBook(object):
                     play.max_fail_pct = 0
 
                 # If threshold for max nodes failed is exceeded , bail out.
-                if (hosts_count - len(host_list)) > int((play.max_fail_pct)/100.0 * hosts_count):
-                    host_list = None
+                if play.serial > 0:
+                    # if serial is set, we need to shorten the size of host_count
+                    play_count = len(play._play_hosts)
+                    if (play_count - len(host_list)) > int((play.max_fail_pct)/100.0 * play_count):
+                        host_list = None
+                else:
+                    if (hosts_count - len(host_list)) > int((play.max_fail_pct)/100.0 * hosts_count):
+                        host_list = None
 
                 # if no hosts remain, drop out
                 if not host_list:
