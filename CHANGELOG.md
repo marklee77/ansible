@@ -7,6 +7,7 @@ Major features/changes:
 
 * The deprecated legacy variable templating system has been finally removed.  Use {{ foo }} always not $foo or ${foo}.
 * Any data file can also be JSON.  Use sparingly -- with great power comes great responsibility.  Starting file with "{" or "[" denotes JSON.
+* Added 'gathering' param for ansible.cfg to change the default gather_facts policy.
 
 New Modules:
 
@@ -17,15 +18,20 @@ New Modules:
 * packaging: homebrew_cask (OS X) 
 * notification: nexmo (SMS)
 * notification: twilio (SMS)
+* notification: slack (Slack.com)
+* notification: typetalk (Typetalk.in)
 * system: debconf
 * system: ufw
 * system: locale_gen
 * system: alternatives
+* system: capabilities
 * net_infrastructure: bigip_facts
 * cloud: digital_ocean_domain
 * cloud: digital_ocean_sshkey 
 * cloud: rax_identity
 * cloud: ec2_asg (configure autoscaling groups)
+* cloud: ec2_scaling_policy
+* cloud: ec2_metricalarm
 
 Other notable changes:
 

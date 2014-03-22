@@ -117,7 +117,7 @@ class Play(object):
         self.sudo             = ds.get('sudo', self.playbook.sudo)
         self.sudo_user        = ds.get('sudo_user', self.playbook.sudo_user)
         self.transport        = ds.get('connection', self.playbook.transport)
-        self.gather_facts     = ds.get('gather_facts', True)
+        self.gather_facts     = ds.get('gather_facts', None)
         self.remote_port      = self.remote_port
         self.any_errors_fatal = utils.boolean(ds.get('any_errors_fatal', 'false'))
         self.accelerate       = utils.boolean(ds.get('accelerate', 'false'))
@@ -142,6 +142,8 @@ class Play(object):
         self._tasks      = self._load_tasks(self._ds.get('tasks', []), load_vars)
         self._handlers   = self._load_tasks(self._ds.get('handlers', []), load_vars)
 
+        # apply any missing tags to role tasks
+        self._late_merge_role_tags()
 
         if self.sudo_user != 'root':
             self.sudo = True
@@ -234,6 +236,8 @@ class Play(object):
                         # (dep_vars) to look for tags going forward
                         def __merge_tags(var_obj):
                             old_tags = dep_vars.get('tags', [])
+                            if isinstance(old_tags, basestring):
+                                old_tags = [old_tags, ]
                             if isinstance(var_obj, dict):
                                 new_tags = var_obj.get('tags', [])
                                 if isinstance(new_tags, basestring):
@@ -710,6 +714,31 @@ class Play(object):
 
     # *************************************************
 
+    def _late_merge_role_tags(self):
+        # build a local dict of tags for roles
+        role_tags = {}
+        for task in self._ds['tasks']:
+            if 'role_name' in task:
+                this_role = task['role_name']
+
+                if this_role not in role_tags:
+                    role_tags[this_role] = []
+
+                if 'tags' in task['vars']:
+                    if isinstance(task['vars']['tags'], basestring):
+                        role_tags[task['role_name']] += shlex.split(task['vars']['tags'])
+                    else:
+                        role_tags[task['role_name']] += task['vars']['tags']
+
+        # apply each role's tags to it's tasks
+        for idx, val in enumerate(self._tasks):
+            if hasattr(val, 'role_name'):
+                this_role = val.role_name
+                if this_role in role_tags:
+                    self._tasks[idx].tags = sorted(set(self._tasks[idx].tags + role_tags[this_role]))
+
+    # *************************************************
+
     def _has_vars_in(self, msg):
         return "$" in msg or "{{" in msg
 
@@ -748,6 +777,7 @@ class Play(object):
                             if self._has_vars_in(filename2) and not self._has_vars_in(filename3):
                                 # this filename has variables in it that were fact specific
                                 # so it needs to be loaded into the per host SETUP_CACHE
+                                data = utils.combine_vars(inject, data)
                                 self.playbook.SETUP_CACHE[host].update(data)
                                 self.playbook.callbacks.on_import_for_host(host, filename4)
                         elif not self._has_vars_in(filename4):
@@ -780,6 +810,7 @@ class Play(object):
                     if host is not None and self._has_vars_in(filename2) and not self._has_vars_in(filename3):
                         # running a host specific pass and has host specific variables
                         # load into setup cache
+                        new_vars = utils.combine_vars(inject, new_vars)
                         self.playbook.SETUP_CACHE[host] = utils.combine_vars(
                             self.playbook.SETUP_CACHE[host], new_vars)
                         self.playbook.callbacks.on_import_for_host(host, filename4)
